@@ -1,4 +1,4 @@
-name: Deploy CliniComms2 to GitHub Pages
+name: Deploy CliniComms to GitHub Pages
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
 
       - name: Type-check and build for GitHub Pages
         env:
-          VITE_BASE_PATH: /CliniComms2/
+          VITE_BASE_PATH: /CliniComms/
         run: npm run lint && npm run build
 
       - name: Upload Pages artifact
