@@ -55,6 +55,7 @@ Click **`Live Transceiver`** in the left sidebar (default screen) and look at th
      2. Check **`Live Speaker Audio`**, uncheck **`Human Voice on Channel (LBT)`**, set **`Channel Static Injector`** to **`0%`–`12%`**, and turn speaker volume up (`60%–80%`).
      3. Hold the transmitter speaker near the receiver microphone and transmit (`Send Medic GPS SOS`, or type up to 8 characters in the bottom-right box and press **Enter** / click **`↑`**).
    - **What to check:** Wait ~2 seconds for the audio burst to finish—the Receiver decodes the sound waves with Goertzel DSP and logs a new row in **`Decoded Telemetry Frames`** labeled **`Acoustic Mic`** in the **Transport** column.
+   - **If receiving fails in a quiet environment:** Reload the Receiver device's webpage, re-enable **`Acoustic Mic RX`** (`LISTENING`), and re-transmit the burst.
    - *(Alternative)* Click **`.WAV`** in **TX & Channel Control** to download the `44.1 kHz` audio file and play it near the Receiver's microphone.
 
 ---
