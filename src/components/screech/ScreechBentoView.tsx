@@ -35,7 +35,7 @@ export const ScreechBentoView: React.FC<ScreechBentoViewProps> = ({
   onAcknowledge,
   searchQuery,
 }) => {
-  const [showHexMatrix, setShowHexMatrix] = useState(false);
+  const [showHexMatrix, setShowHexMatrix] = useState(true);
 
   // Compute 28-byte integrity breakdown for the Donut Ring
   const parityBytes = 8;
@@ -128,7 +128,7 @@ export const ScreechBentoView: React.FC<ScreechBentoViewProps> = ({
           </div>
 
           {showHexMatrix ? (
-            <div className="flex-1 overflow-y-auto max-h-[245px] -mx-2">
+            <div className="flex-1 overflow-y-auto max-h-[345px] min-h-[305px] -mx-2">
               <HexMatrixInspector txFrame={lastTxFrame} decoded={lastDecoded} />
             </div>
           ) : (
@@ -189,54 +189,55 @@ export const ScreechBentoView: React.FC<ScreechBentoViewProps> = ({
         </div>
       </div>
 
-      {/* Bottom Row: Stacked KPIs (Left) + Telemetry Log Table (Right) */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3.5">
-        {/* Stacked KPI Cards */}
-        <div className="xl:col-span-4 flex flex-col gap-3.5">
-          {/* KPI 1: VHF Link Signal */}
-          <div className="flex-1 rounded-xl border border-[#E7E6E2] dark:border-[#2A2A28] bg-white dark:bg-[#181817] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div className="text-[13px] font-semibold text-[#1A1A19] dark:text-[#F2F0EA]">
+      {/* Bottom Row: Combined Half-Height KPI Block (Left) + Telemetry Log Table (Right) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-3.5 items-start">
+        {/* Combined Single KPI Block (half the height of the prior 2-card stack) */}
+        <div className="xl:col-span-4 rounded-xl border border-[#E7E6E2] dark:border-[#2A2A28] bg-white dark:bg-[#181817] shadow-[0_1px_2px_rgba(0,0,0,0.02)] grid grid-cols-2 divide-x divide-[#E7E6E2] dark:divide-[#2A2A28]">
+          {/* Left Half: VHF Link Budget */}
+          <div className="p-2.5 flex flex-col justify-between text-center min-w-0">
+            <div className="text-[12px] leading-tight font-semibold text-[#1A1A19] dark:text-[#F2F0EA] text-left min-h-[30px]">
               VHF Link Budget
             </div>
-            <div className="py-4 text-center">
-              <div className="text-xs text-[#8A8984] mb-1">146.520 MHz Rx Strength</div>
-              <div className="text-3xl font-semibold tracking-tight text-[#1A1A19] dark:text-[#F2F0EA] tabular-nums">
-                {rfLink.rxSignalDbm.toFixed(1)} <span className="text-base font-normal text-[#8A8984]">dBm</span>
+            <div className="py-1.5">
+              <div className="text-[11px] text-[#8A8984] mb-0.5">146.520 MHz Rx</div>
+              <div className="text-xl font-semibold tracking-tight text-[#1A1A19] dark:text-[#F2F0EA] tabular-nums">
+                {rfLink.rxSignalDbm.toFixed(1)}{' '}
+                <span className="text-xs font-normal text-[#8A8984]">dBm</span>
               </div>
-              <div className="mt-2.5 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums bg-[#F4F4F2] dark:bg-[#222220]">
+              <div className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-medium tabular-nums bg-[#F4F4F2] dark:bg-[#222220] max-w-full truncate">
                 {rfLink.linkQuality === 'CLEAR' ? (
-                  <span className="text-[#15803D] inline-flex items-center gap-1">
-                    <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
-                    CLEAR LOS · {rfLink.distanceKm.toFixed(1)} km
+                  <span className="text-[#15803D] inline-flex items-center gap-0.5">
+                    <ArrowUpRight className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                    CLEAR · {rfLink.distanceKm.toFixed(1)} km
                   </span>
                 ) : rfLink.linkQuality === 'DEGRADED' ? (
-                  <span className="text-[#B45309] inline-flex items-center gap-1">
-                    <ArrowDownRight className="w-3 h-3" aria-hidden="true" />
+                  <span className="text-[#B45309] inline-flex items-center gap-0.5">
+                    <ArrowDownRight className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
                     DEGRADED · {rfLink.distanceKm.toFixed(1)} km
                   </span>
                 ) : (
-                  <span className="text-[#C81E1E] inline-flex items-center gap-1">
-                    <ArrowDownRight className="w-3 h-3" aria-hidden="true" />
-                    BLOCKED · +{rfLink.diffractionLossDb.toFixed(0)} dB loss
+                  <span className="text-[#C81E1E] inline-flex items-center gap-0.5">
+                    <ArrowDownRight className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                    BLOCKED · +{rfLink.diffractionLossDb.toFixed(0)} dB
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* KPI 2: Solar Power & FEC Repair */}
-          <div className="flex-1 rounded-xl border border-[#E7E6E2] dark:border-[#2A2A28] bg-white dark:bg-[#181817] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div className="text-[13px] font-semibold text-[#1A1A19] dark:text-[#F2F0EA]">
+          {/* Right Half: Continuous Solar Load */}
+          <div className="p-2.5 flex flex-col justify-between text-center min-w-0">
+            <div className="text-[12px] leading-tight font-semibold text-[#1A1A19] dark:text-[#F2F0EA] text-left min-h-[30px]">
               Continuous Solar Load
             </div>
-            <div className="py-4 text-center">
-              <div className="text-xs text-[#8A8984] mb-1">Total System Draw</div>
-              <div className="text-3xl font-semibold tracking-tight text-[#1A1A19] dark:text-[#F2F0EA] tabular-nums">
-                1.80 <span className="text-base font-normal text-[#8A8984]">W</span>
+            <div className="py-1.5">
+              <div className="text-[11px] text-[#8A8984] mb-0.5">System Draw</div>
+              <div className="text-xl font-semibold tracking-tight text-[#1A1A19] dark:text-[#F2F0EA] tabular-nums">
+                1.80 <span className="text-xs font-normal text-[#8A8984]">W</span>
               </div>
-              <div className="mt-2.5 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium tabular-nums bg-[#ECFDF5] dark:bg-[#052E16] text-[#15803D] dark:text-[#4ADE80]">
-                <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
-                $37 BOM · {fecRepairedTotal}B FEC Repaired
+              <div className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-medium tabular-nums bg-[#ECFDF5] dark:bg-[#052E16] text-[#15803D] dark:text-[#4ADE80] max-w-full truncate">
+                <ArrowUpRight className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                $37 · {fecRepairedTotal}B FEC
               </div>
             </div>
           </div>

@@ -49,18 +49,18 @@ export const HexMatrixInspector: React.FC<HexMatrixInspectorProps> = ({
   const bytes = decoded?.repairedBytes ?? txFrame;
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DFDDD6] dark:border-[#2A2A28] pb-2.5">
+    <div className="p-2.5 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#DFDDD6] dark:border-[#2A2A28] pb-1.5">
         <div>
-          <h3 className="text-xs font-mono font-semibold tracking-wider text-[#141413] dark:text-[#F2F0EA]">
+          <h3 className="text-[11px] font-mono font-semibold tracking-wider text-[#141413] dark:text-[#F2F0EA]">
             28-BYTE HEX &amp; REED-SOLOMON FEC MATRIX
           </h3>
-          <p className="text-[11px] font-mono text-[#6E6D68] mt-0.5">
-            GF(2^8) 0x11D · 8-SYMBOL PARITY · CRC-16-CCITT (0x1021)
+          <p className="text-[10px] font-mono text-[#6E6D68]">
+            GF(2^8) 0x11D · 8-SYMBOL PARITY · CRC-16 (0x1021)
           </p>
         </div>
         {decoded && (
-          <div className="text-right font-mono text-[11px] tabular-nums">
+          <div className="text-right font-mono text-[10px] tabular-nums">
             <span
               className={
                 decoded.valid
@@ -84,7 +84,7 @@ export const HexMatrixInspector: React.FC<HexMatrixInspectorProps> = ({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-1.5" data-testid="hex-matrix-grid">
+          <div className="grid grid-cols-7 gap-1" data-testid="hex-matrix-grid">
             {Array.from({ length: FRAME_SIZE }).map((_, idx) => {
               const health: ByteHealth = decoded ? decoded.byteHealth[idx] : 'INTACT';
               const finalVal = bytes[idx];
@@ -96,9 +96,9 @@ export const HexMatrixInspector: React.FC<HexMatrixInspectorProps> = ({
                 <div
                   key={idx}
                   title={`Byte ${idx.toString().padStart(2, '0')} (${getFieldTag(idx)}) — ${health}`}
-                  className={`border p-1.5 font-mono transition-colors ${getHealthClasses(health)}`}
+                  className={`border p-1 font-mono transition-colors ${getHealthClasses(health)}`}
                 >
-                  <div className="flex items-center justify-between gap-1 text-[9px] text-[#6E6D68]">
+                  <div className="flex items-center justify-between gap-0.5 text-[8px] text-[#6E6D68]">
                     <span>{idx.toString().padStart(2, '0')}</span>
                     <span>{getFieldTag(idx)}</span>
                   </div>

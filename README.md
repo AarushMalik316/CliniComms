@@ -1,20 +1,15 @@
 # SCREECH // POSTMAN — Off-Grid Desert Clinic Comms
 
-## What It Is & Why It Is Necessary
+## What It Is & Why It Is Practical
 
-**Topic — Staying Connected in the Deep Desert:** An off-grid, solar-friendly communications platform (`$37` BOM · `$0/mo` · `1.80 W` draw) combining **VHF acoustic telemetry** over existing analog walkie-talkies with an **encrypted Delay-Tolerant Network (DTN)** that turns routine supply trucks into physical data mules.
+**SCREECH // POSTMAN** is an off-grid communications system built for remote desert clinics that have no cellular, fiber, or reliable internet access. It combines two real, field-ready tools:
+1. **The Screech (`Live Transceiver`):** Turns any ordinary analog walkie-talkie into a digital telemetry modem using real Bell 202 audio tones (`1200 Hz / 2200 Hz`), `CRC-16-CCITT`, and `GF(2^8)` Reed-Solomon error repair.
+2. **The Postman (`DTN Mailbag`):** Moves encrypted medical records (`AES-256-GCM` + `SHA-256`) using supply trucks and low-cost microcontrollers (such as an **Arduino / ESP32** with an SD card) as physical Wi-Fi data mules.
 
-**Why It Is Necessary:** Remote desert clinics and mobile medics operate far beyond cellular towers and fiber backhaul, while satellite terminals (such as Starlink at `65 W` and `$100+/mo`) drain small clinic solar batteries overnight and require recurring subscriptions. Yet clinics still have two urgent communication needs:
-1. **Low-bandwidth, life-critical telemetry** — medic GPS SOS alerts and vaccine fridge excursion warnings (`>8 °C`) that must cross desert ridges immediately over existing NGO VHF radios, even through sandstorm static.
-2. **High-bandwidth clinical records** — patient histories, lab bloodwork, and imaging manifests that must travel securely between the clinic and town hospital without internet access or exposing plaintext patient data in transit.
-
----
-
-**SCREECH // POSTMAN** is an offline-first Progressive Web App (PWA) and hardware reference design built for remote clinics without cellular, fiber, or satellite coverage (`$37` BOM · `1.80 W` solar draw).
-
-It combines two real working transports:
-1. **The Screech (`Live Transceiver`):** Turns any analog walkie-talkie into a digital telemetry radio using real Bell 202 audio tones (`1200 Hz / 2200 Hz`), carrier sense, `CRC-16-CCITT`, and `GF(2^8)` Reed-Solomon error repair.
-2. **The Postman (`DTN Mailbag`):** Transfers encrypted medical files (`AES-256-GCM` + `SHA-256`) using supply trucks as zero-touch `<100m` Wi-Fi data mules, saved persistently in browser **IndexedDB**.
+**Why It Is Good & Practical:**
+- **Ultra-low cost & no subscriptions:** Built from ~$37 of off-the-shelf parts with **$0/month** airtime fees—unlike satellite terminals (`$599` hardware + `$120/mo`).
+- **Solar-friendly (`1.80 W` draw):** Runs continuously on small clinic solar batteries for days, whereas satellite dishes (`65 W`) drain small off-grid batteries overnight.
+- **Works with existing radios & routine vehicles:** Upgrades NGO walkie-talkies with a `$2` audio cable for immediate SOS/fridge alerts, while an **Arduino / ESP32** mounted in a supply truck automatically dumps encrypted clinic files onto its local storage, carries them across the desert without internet, and connects to the destination Wi-Fi network upon arrival to upload them.
 
 ---
 
@@ -24,8 +19,8 @@ It combines two real working transports:
 - **Self-Healing 28-Byte Protocol (`28-Byte FEC Integrity`):** Repairs up to ~30% burst corruption using Reed-Solomon parity and rejects overly corrupted packets with `CRC-16-CCITT` before they ever reach the rescue map.
 - **Two-Screen Ranger Receiver (`Kiosk Drawer` & `Kiosk Tab`):** Syncs live alerts across browser tabs via `BroadcastChannel` and plots only CRC-verified coordinates.
 - **Terrain & VHF Line-of-Sight Map (`Field Map & LOS`):** Calculates real Haversine distance, `146.520 MHz` free-space path loss (FSPL), knife-edge canyon diffraction, and 1st Fresnel clearance on an interactive Leaflet topographic map.
-- **Encrypted Truck Delivery (`DTN Mailbag`):** Encrypts real uploaded files or generated HL7/Lab records in the browser, syncs automatically within `<100m`, keeps the truck mule completely blind (no decryption keys), and verifies `SHA-256` integrity on delivery.
-- **Hardware, Firmware & Offline PWA (`Hardware & Firmware`):** Includes a `$2` TRRS wiring schematic, solar battery runtime calculator, downloadable ESP32/Raspberry Pi firmware in `/firmware/`, `Night Ops` dark mode, and offline PWA support.
+- **Encrypted Truck / Arduino Data Mule (`DTN Mailbag`):** Encrypts real uploaded files or generated HL7/Lab records in the browser (`AES-256-GCM` + `SHA-256`). Clinics dump encrypted payloads onto an **Arduino / ESP32** (or Raspberry Pi) mule within `<100m` Wi-Fi range; the mule holds zero decryption keys and automatically connects to the destination Wi-Fi network when it arrives at the town hospital to deliver the files.
+- **Hardware, Firmware & Offline PWA (`Hardware & Firmware`):** Includes a `$2` TRRS wiring schematic, solar battery runtime calculator, downloadable Arduino/ESP32 & Raspberry Pi firmware in `/firmware/`, `Night Ops` dark mode, and offline PWA support.
 
 ---
 
@@ -40,8 +35,7 @@ Click **`Live Transceiver`** in the left sidebar (default screen) and look at th
    - **What to check:** You will hear the `500ms` mark tone followed by the digital burst. The **`Acoustic AFSK Signal`** card displays the live waveform and `1.2 kHz / 2.2 kHz` spectrum peaks, and a new verified SOS row appears inside **`Decoded Telemetry Frames`**.
 2. **Test Error Repair (Reed-Solomon FEC):**
    - Drag the **`Channel Static Injector`** slider to **`20%`** and click **`Send Medic GPS SOS`**.
-   - **What to check:** Even though static corrupts bytes in transit, the status shows **`FEC +NB`** in green inside **`Decoded Telemetry Frames`**, and the green slice updates on the **`28-Byte FEC Integrity`** ring.
-   - Click **`Hex Matrix`** on the **`28-Byte FEC Integrity`** card to inspect all 28 individual bytes (`PRE`, `SYNC`, `TYPE`, `NODE`, `TIME`, `DATA`, `CRC`, `FEC`), then click **`Ring View`** to return.
+   - **What to check:** Even though static corrupts bytes in transit, the status shows **`FEC +NB`** in green inside **`Decoded Telemetry Frames`**, and the **`28-Byte FEC Integrity`** Hex Matrix highlights the repaired bytes in green (click **`Ring View`** to view the breakdown ring, or **`Hex Matrix`** to return).
 3. **Test Bad-Packet Rejection (`CRC-16`):**
    - Drag **`Channel Static Injector`** to **`60%`** (above FEC recovery capacity) and click **`Transmit`**.
    - **What to check:** The frame fails integrity and logs **`CRC FAIL`** / **`Rejected (CRC-16 Mismatch)`** in red—corrupted coordinates are never plotted.
@@ -50,10 +44,18 @@ Click **`Live Transceiver`** in the left sidebar (default screen) and look at th
    - **What to check:** The top status changes to **`Carrier Busy Wait`** and transmission is blocked so the modem does not talk over human speech. Uncheck it to resume.
 5. **Test Vaccine Fridge Alert & Custom 8-Byte Code:**
    - Click **`Simulate Fridge >8°C Excursion`** (sets the **`Fridge`** probe to `11.4°C`), then click **`Transmit`**.
-   - Or type up to 8 characters (such as `MED_EVAC`) in the **`8-byte field code (e.g. MED_EVAC)...`** input at the bottom-right and press **Enter** (or click the round arrow button).
-6. **Test Real Audio Export & Microphone Decoding:**
-   - Click **`.WAV`** at the top of **TX & Channel Control** to download a real `44.1 kHz` AFSK `.wav` audio file.
-   - Click **`Acoustic Mic RX`** (switches from `OFF` to `LISTENING`) on a second browser/device and play the `.WAV` file near the microphone to decode over the air.
+   - Or type up to 8 characters (such as `MED_EVAC`) in the **`8-byte field code (e.g. MED_EVAC)...`** input at the bottom-right and press **Enter** (or click the round **`↑`** button).
+6. **Test Real Over-the-Air Audio (Two Devices or Two Separate Browsers):**
+   - **Why two devices/browsers:** Two tabs inside the *same* browser sync via `BroadcastChannel` (`VHF AFSK`). Using **two separate devices** (e.g., laptop + phone) or **two different browsers** (e.g., Chrome + Firefox/Edge) tests true speaker-to-microphone acoustic decoding.
+   - **On the Receiver (Device/Browser A):**
+     1. Make sure **`Kiosk Drawer`** is closed so **`TX & Channel Control`** is visible.
+     2. Click **`Acoustic Mic RX`** so it turns green and reads **`LISTENING`** (allow microphone permission when prompted).
+   - **On the Transmitter (Device/Browser B):**
+     1. Keep **`Acoustic Mic RX`** set to **`OFF`**.
+     2. Check **`Live Speaker Audio`**, uncheck **`Human Voice on Channel (LBT)`**, set **`Channel Static Injector`** to **`0%`–`12%`**, and turn speaker volume up (`60%–80%`).
+     3. Hold the transmitter speaker near the receiver microphone and transmit (`Send Medic GPS SOS`, or type up to 8 characters in the bottom-right box and press **Enter** / click **`↑`**).
+   - **What to check:** Wait ~2 seconds for the audio burst to finish—the Receiver decodes the sound waves with Goertzel DSP and logs a new row in **`Decoded Telemetry Frames`** labeled **`Acoustic Mic`** in the **Transport** column.
+   - *(Alternative)* Click **`.WAV`** in **TX & Channel Control** to download the `44.1 kHz` audio file and play it near the Receiver's microphone.
 
 ---
 
@@ -95,6 +97,8 @@ Click **`DTN Mailbag`** in the left sidebar:
 3. **Test Monsoon Disruption & Persistence:**
    - Check **`Washed-Out Monsoon Road`** inside **`Supply Truck Mule`** to lock out truck dispatch while keeping VHF radio bursts active.
    - Refresh the page (`F5`): all encrypted bundles and sync receipts persist via **IndexedDB**. Click **`Reset Spooled Files`** anytime to reset to initial state.
+4. **Physical Hardware Deployment (Arduino / ESP32 Data Mule):**
+   - In the field, you can mount an **Arduino / ESP32** (or any compatible Wi-Fi microcontroller with MicroSD storage) inside a supply vehicle: the clinic dumps encrypted files onto it over local Wi-Fi, the device transports the unreadable ciphertext across the desert, and once the destination is reached it connects to the destination Wi-Fi network to upload the files automatically.
 
 ---
 
@@ -125,5 +129,5 @@ npm run lint && npm run build
 
 ### Flashing Physical Hardware (`/firmware/`)
 - **VHF Walkie-Talkie TX Node:** `firmware/screech_tx_node/screech_tx_node.ino` (Arduino IDE · ESP32 Dev Module · `TinyGPSPlus` · `115200` baud).
-- **Truck Wi-Fi Mule:** `firmware/postman_truck_mule/postman_truck_mule.ino` (ESP32 + SPI MicroSD on `CS=GPIO5`).
+- **Truck Wi-Fi Mule:** `firmware/postman_truck_mule/postman_truck_mule.ino` (Arduino / ESP32 + SPI MicroSD on `CS=GPIO5` — dumps encrypted clinic data locally and connects to destination Wi-Fi upon arrival).
 - **Clinic 1.0W Mailbox Daemon:** `firmware/clinic_pi_mailbox/mailbox_daemon.py` (Python 3 + `cryptography` on Raspberry Pi Zero W).
