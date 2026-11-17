@@ -40,7 +40,11 @@ import {
 import { SidebarNav, WorkspaceId } from './components/layout/SidebarNav';
 import { TopStudioHeader } from './components/layout/TopStudioHeader';
 import { ScreechBentoView } from './components/screech/ScreechBentoView';
-import { RightTransceiverDrawer, TxMode } from './components/screech/RightTransceiverDrawer';
+import {
+  RightTransceiverDrawer,
+  TransmitOptions,
+  TxMode,
+} from './components/screech/RightTransceiverDrawer';
 import { KioskLogEntry, RangerKioskPanel } from './components/screech/RangerKioskPanel';
 import { GeospatialWorkspace } from './components/map/GeospatialWorkspace';
 import { DecodedMapPin } from './components/map/DesertLeafletMap';
@@ -102,6 +106,14 @@ export default function App() {
   // Kiosk RX state
   const [kioskLogs, setKioskLogs] = useState<KioskLogEntry[]>([]);
   const [alarmMuted, setAlarmMuted] = useState<boolean>(false);
+  const txTimersRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      txTimersRef.current.forEach((id) => window.clearTimeout(id));
+      txTimersRef.current = [];
+    };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -289,18 +301,21 @@ export default function App() {
     }
   };
 
-  const buildPayload = (overrideCode?: string): FramePayload => {
-    if (overrideCode || txMode === 'CUSTOM_FIELD_CODE') {
+  const buildPayload = (options?: TransmitOptions): FramePayload => {
+    const effectiveMode: TxMode =
+      options?.mode ?? (options?.code ? 'CUSTOM_FIELD_CODE' : txMode);
+    if (effectiveMode === 'CUSTOM_FIELD_CODE') {
       return {
         kind: 'CUSTOM_FIELD_CODE',
-        code: (overrideCode || 'MED_EVAC').slice(0, 8),
+        code: (options?.code || 'MED_EVAC').slice(0, 8),
       };
     }
-    if (txMode === 'FRIDGE_TELEMETRY') {
+    if (effectiveMode === 'FRIDGE_TELEMETRY') {
+      const effectiveTemp = options?.fridgeTempC ?? fridgeTempC;
       return {
         kind: 'FRIDGE_TELEMETRY',
-        tempC: fridgeTempC,
-        alertCode: fridgeTempC > 8.0 ? 1 : 0,
+        tempC: effectiveTemp,
+        alertCode: effectiveTemp > 8.0 ? 1 : 0,
         batteryPct: 88,
         flags: [0, 1, 1, 1],
       };
@@ -312,9 +327,11 @@ export default function App() {
     };
   };
 
-  const handleTransmit = (overrideCode?: string) => {
-    const liveSample = acousticModem.sampleLiveFrame();
-    const senseBuf = liveSample?.timeDomain ?? new Float32Array(512);
+  const handleTransmit = (options?: TransmitOptions) => {
+    if (pipelineBusy) return;
+
+    const micSample = acousticModem.sampleMicFrame();
+    const senseBuf = micSample?.timeDomain ?? new Float32Array(512);
     const lbt = checkCarrierSense(senseBuf, humanVoiceActive);
 
     if (!lbt.clear) {
@@ -323,7 +340,7 @@ export default function App() {
       return;
     }
 
-    const payload = buildPayload(overrideCode);
+    const payload = buildPayload(options);
     const frame = encodeFrame({
       nodeId: payload.kind === 'FRIDGE_TELEMETRY' ? 0x0101 : 0x0001,
       payload,
@@ -346,11 +363,11 @@ export default function App() {
       void acousticModem.playAfskBurst(noisyAudio, modulated.sampleRate);
     }
 
-    setTimeout(() => {
+    const markTimer = window.setTimeout(() => {
       setModemState('TX AFSK Burst');
     }, 480);
 
-    setTimeout(() => {
+    const rxTimer = window.setTimeout(() => {
       const noisyPacket = injectChannelNoise(frame, noisePercent);
       const decoded = decodeAndRepairFrame(
         noisyPacket.corruptedFrame,
@@ -395,7 +412,9 @@ export default function App() {
         ch.postMessage(msg);
         ch.close();
       }
-    }, Math.max(950, durMs - 100));
+    }, Math.max(950, durMs + 20));
+
+    txTimersRef.current.push(markTimer, rxTimer);
   };
 
   const handleExportWav = () => {
@@ -500,6 +519,7 @@ export default function App() {
         onSelectNodeFilter={setSelectedNodeFilter}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        pipelineBusy={pipelineBusy}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">
@@ -509,6 +529,7 @@ export default function App() {
           gpsLocked={gpsLocked}
           modemState={modemState}
           splitKioskOpen={splitKioskOpen}
+          pipelineBusy={pipelineBusy}
           onToggleSplitKiosk={() => setSplitKioskOpen((s) => !s)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onQuickTransmit={() => handleTransmit()}

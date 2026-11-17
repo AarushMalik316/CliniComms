@@ -32,6 +32,7 @@ interface SidebarNavProps {
   onSelectNodeFilter: (nodeId: string | null) => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  pipelineBusy?: boolean;
 }
 
 const WORKSPACE_ITEMS: Array<{ id: WorkspaceId; label: string; icon: React.FC<{ className?: string }> }> = [
@@ -66,6 +67,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onSelectNodeFilter,
   mobileOpen,
   onCloseMobile,
+  pipelineBusy = false,
 }) => {
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const [nodesOpen, setNodesOpen] = useState(true);
@@ -150,8 +152,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       <div className="px-2 pb-2 space-y-0.5">
         <button
           type="button"
+          disabled={pipelineBusy}
           onClick={onQuickTransmit}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-medium text-[#4B4A46] dark:text-[#C8C6BE] hover:bg-[#ECECE9] dark:hover:bg-[#1F1F1D] transition-colors cursor-pointer whitespace-nowrap"
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[13px] font-medium text-[#4B4A46] dark:text-[#C8C6BE] hover:bg-[#ECECE9] dark:hover:bg-[#1F1F1D] transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5 text-[#6E6D68]" aria-hidden="true" />
           <span>New Burst</span>

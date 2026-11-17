@@ -128,7 +128,7 @@ export const ScreechBentoView: React.FC<ScreechBentoViewProps> = ({
           </div>
 
           {showHexMatrix ? (
-            <div className="flex-1 overflow-y-auto max-h-[345px] min-h-[305px] -mx-2">
+            <div className="flex-1 -mx-2">
               <HexMatrixInspector txFrame={lastTxFrame} decoded={lastDecoded} />
             </div>
           ) : (

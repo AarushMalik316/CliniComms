@@ -225,6 +225,41 @@ class AcousticModemEngine {
     this.recordedChunks = [];
   }
 
+  public sampleMicFrame(): LiveAudioFrame | null {
+    const analyser = this.micAnalyser;
+    if (!analyser || !this.ctx) return null;
+
+    const timeDomain = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(timeDomain);
+
+    const freqData = new Float32Array(analyser.frequencyBinCount);
+    analyser.getFloatFrequencyData(freqData);
+
+    const rms = computeRmsEnergy(timeDomain);
+    const markEnergy = goertzelMagnitude(
+      timeDomain,
+      0,
+      Math.min(timeDomain.length, 512),
+      MARK_FREQ_HZ,
+      this.ctx.sampleRate
+    );
+    const spaceEnergy = goertzelMagnitude(
+      timeDomain,
+      0,
+      Math.min(timeDomain.length, 512),
+      SPACE_FREQ_HZ,
+      this.ctx.sampleRate
+    );
+
+    return {
+      timeDomain,
+      spectrumBins: freqData,
+      markEnergy,
+      spaceEnergy,
+      rms,
+    };
+  }
+
   public sampleLiveFrame(): LiveAudioFrame | null {
     const analyser = this.txAnalyser ?? this.micAnalyser;
     if (!analyser || !this.ctx) return null;

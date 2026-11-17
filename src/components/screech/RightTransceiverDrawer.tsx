@@ -15,6 +15,12 @@ import { KioskLogEntry } from './RangerKioskPanel';
 
 export type TxMode = 'MEDIC_SOS' | 'FRIDGE_TELEMETRY' | 'CUSTOM_FIELD_CODE';
 
+export interface TransmitOptions {
+  mode?: TxMode;
+  code?: string;
+  fridgeTempC?: number;
+}
+
 interface RightTransceiverDrawerProps {
   txMode: TxMode;
   onChangeTxMode: (mode: TxMode) => void;
@@ -33,7 +39,7 @@ interface RightTransceiverDrawerProps {
   micError: string | null;
   pipelineNote: string;
   pipelineBusy: boolean;
-  onTransmit: (overrideCode?: string) => void;
+  onTransmit: (options?: TransmitOptions) => void;
   onExportWav: () => void;
   onLockGps: () => void;
   gpsLoading: boolean;
@@ -70,10 +76,11 @@ export const RightTransceiverDrawer: React.FC<RightTransceiverDrawerProps> = ({
 
   const handleComposerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (pipelineBusy) return;
     const cleaned = composerCode.trim().toUpperCase().slice(0, 8);
     if (cleaned) {
       onChangeTxMode('CUSTOM_FIELD_CODE');
-      onTransmit(cleaned);
+      onTransmit({ mode: 'CUSTOM_FIELD_CODE', code: cleaned });
       setComposerCode('');
     } else {
       onTransmit();
@@ -120,11 +127,12 @@ export const RightTransceiverDrawer: React.FC<RightTransceiverDrawerProps> = ({
           <div className="inline-flex flex-wrap justify-end gap-1.5">
             <button
               type="button"
+              disabled={pipelineBusy}
               onClick={() => {
                 onChangeTxMode('MEDIC_SOS');
-                onTransmit();
+                onTransmit({ mode: 'MEDIC_SOS' });
               }}
-              className="rounded-lg bg-[#F4F4F2] dark:bg-[#222220] px-3 py-1.5 text-xs font-medium text-[#1A1A19] dark:text-[#F2F0EA] hover:bg-[#ECECE9] dark:hover:bg-[#2C2C29] transition-colors cursor-pointer"
+              className="rounded-lg bg-[#F4F4F2] dark:bg-[#222220] px-3 py-1.5 text-xs font-medium text-[#1A1A19] dark:text-[#F2F0EA] hover:bg-[#ECECE9] dark:hover:bg-[#2C2C29] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Send Medic GPS SOS
             </button>
@@ -151,11 +159,13 @@ export const RightTransceiverDrawer: React.FC<RightTransceiverDrawerProps> = ({
         <div className="flex justify-end">
           <button
             type="button"
+            disabled={pipelineBusy}
             onClick={() => {
               onChangeTxMode('FRIDGE_TELEMETRY');
               onFridgeTempChange(11.4);
+              onTransmit({ mode: 'FRIDGE_TELEMETRY', fridgeTempC: 11.4 });
             }}
-            className="rounded-lg bg-[#F4F4F2] dark:bg-[#222220] px-3 py-1.5 text-xs font-medium text-[#1A1A19] dark:text-[#F2F0EA] hover:bg-[#ECECE9] dark:hover:bg-[#2C2C29] transition-colors cursor-pointer"
+            className="rounded-lg bg-[#F4F4F2] dark:bg-[#222220] px-3 py-1.5 text-xs font-medium text-[#1A1A19] dark:text-[#F2F0EA] hover:bg-[#ECECE9] dark:hover:bg-[#2C2C29] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Simulate Fridge &gt;8°C Excursion
           </button>
@@ -346,8 +356,9 @@ export const RightTransceiverDrawer: React.FC<RightTransceiverDrawerProps> = ({
             </span>
             <button
               type="submit"
+              disabled={pipelineBusy}
               aria-label="Transmit 28-byte AFSK burst"
-              className="w-7 h-7 rounded-full bg-[#1A1A19] dark:bg-[#F2F0EA] text-white dark:text-[#111110] inline-flex items-center justify-center hover:bg-[#C2934B] dark:hover:bg-[#C2934B] dark:hover:text-white transition-colors cursor-pointer"
+              className="w-7 h-7 rounded-full bg-[#1A1A19] dark:bg-[#F2F0EA] text-white dark:text-[#111110] inline-flex items-center justify-center hover:bg-[#C2934B] dark:hover:bg-[#C2934B] dark:hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
