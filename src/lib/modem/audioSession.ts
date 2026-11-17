@@ -6,6 +6,7 @@ import {
   MARK_FREQ_HZ,
   SPACE_FREQ_HZ,
 } from './afsk';
+import { decodeAndRepairFrame } from '../protocol/frame';
 
 export interface LiveAudioFrame {
   timeDomain: Float32Array;
@@ -69,7 +70,7 @@ class AcousticModemEngine {
       src.buffer = buf;
 
       const gain = ctx.createGain();
-      gain.gain.value = 0.25; // comfortable acoustic speaker level
+      gain.gain.value = 0.65; // strong acoustic speaker level for over-the-air RX
 
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
@@ -118,15 +119,18 @@ class AcousticModemEngine {
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
 
-      // Capture rolling 2.5s window to demodulate live acoustic AFSK bursts
+      // Capture rolling 3.2s window so full ~1.5s burst + margins are always enclosed
       const proc = ctx.createScriptProcessor(2048, 1, 1);
       this.recordedChunks = [];
       let cooldownUntil = 0;
+      let activeToneChunks = 0;
+      let tailChunksRemaining = 0;
+      let chunkCounter = 0;
 
       proc.onaudioprocess = (ev) => {
         const input = ev.inputBuffer.getChannelData(0);
         this.recordedChunks.push(new Float32Array(input));
-        const maxChunks = Math.ceil((ctx.sampleRate * 2.5) / 2048);
+        const maxChunks = Math.ceil((ctx.sampleRate * 3.2) / 2048);
         if (this.recordedChunks.length > maxChunks) {
           this.recordedChunks.shift();
         }
@@ -134,21 +138,48 @@ class AcousticModemEngine {
         const now = Date.now();
         if (now < cooldownUntil) return;
 
-        // Check for sustained 1200 Hz carrier energy in current window
+        // Check for 1200 Hz / 2200 Hz acoustic energy down to quiet mic levels
         const mEnergy = goertzelMagnitude(input, 0, input.length, MARK_FREQ_HZ, ctx.sampleRate);
         const sEnergy = goertzelMagnitude(input, 0, input.length, SPACE_FREQ_HZ, ctx.sampleRate);
-        if (this.recordedChunks.length >= Math.floor(maxChunks * 0.7) && (mEnergy > 0.08 || sEnergy > 0.08)) {
-          const totalLen = this.recordedChunks.reduce((acc, c) => acc + c.length, 0);
-          const merged = new Float32Array(totalLen);
-          let off = 0;
-          for (const chunk of this.recordedChunks) {
-            merged.set(chunk, off);
-            off += chunk.length;
-          }
-          const demod = demodulateAfskAudio(merged, ctx.sampleRate);
-          if (demod.detected && demod.frame) {
-            cooldownUntil = now + 2200;
+        const tonePresent = mEnergy > 0.008 || sEnergy > 0.008;
+
+        if (tonePresent) {
+          activeToneChunks++;
+          tailChunksRemaining = 6; // Keep checking ~280ms after tone ends
+        } else if (tailChunksRemaining > 0) {
+          tailChunksRemaining--;
+        } else {
+          activeToneChunks = 0;
+          return;
+        }
+
+        chunkCounter++;
+        // Require at least ~320ms of tone and throttle demodulation to every 2nd chunk (~90ms)
+        const minBuffered = Math.ceil((ctx.sampleRate * 1.5) / 2048);
+        if (
+          this.recordedChunks.length < minBuffered ||
+          activeToneChunks < 7 ||
+          (chunkCounter % 2 !== 0 && tailChunksRemaining > 0)
+        ) {
+          return;
+        }
+
+        const totalLen = this.recordedChunks.reduce((acc, c) => acc + c.length, 0);
+        const merged = new Float32Array(totalLen);
+        let off = 0;
+        for (const chunk of this.recordedChunks) {
+          merged.set(chunk, off);
+          off += chunk.length;
+        }
+
+        const demod = demodulateAfskAudio(merged, ctx.sampleRate);
+        if (demod.detected && demod.frame) {
+          const check = decodeAndRepairFrame(demod.frame, demod.erasureRsIndices);
+          if (check.valid || tailChunksRemaining === 0) {
+            cooldownUntil = now + 1800;
             this.recordedChunks = [];
+            activeToneChunks = 0;
+            tailChunksRemaining = 0;
             onPacketCaptured?.(demod.frame, demod.erasureRsIndices);
           }
         }

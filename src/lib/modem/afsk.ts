@@ -1,4 +1,4 @@
-import { FRAME_SIZE } from '../protocol/frame';
+import { FRAME_SIZE, decodeAndRepairFrame } from '../protocol/frame';
 
 export const SAMPLE_RATE = 44100;
 export const MARK_FREQ_HZ = 1200; // Logic 1
@@ -187,120 +187,182 @@ export interface AfskDemodulationResult {
 }
 
 /**
- * Demodulates an AFSK audio buffer using Goertzel tone detection and 0xAA 0xAA 0x7E framing.
+ * Demodulates an AFSK audio buffer using Goertzel tone detection, AGC normalization,
+ * Mark/Space tilt calibration, and 0xAA 0xAA 0x7E framing.
  */
 export function demodulateAfskAudio(
-  samples: Float32Array,
+  rawSamples: Float32Array,
   sampleRate = SAMPLE_RATE
 ): AfskDemodulationResult {
   const spb = Math.round(sampleRate / BAUD_RATE);
+  const minSamples = FRAME_SIZE * 10 * spb;
+  if (rawSamples.length < minSamples) {
+    return {
+      detected: false,
+      frame: null,
+      erasureRsIndices: [],
+      markEnergyAvg: 0,
+      spaceEnergyAvg: 0,
+      snrDb: 0,
+    };
+  }
+
+  // AGC normalize so quiet microphone captures (~0.005) and full-scale signals work identically
+  let peakAbs = 0;
+  for (let i = 0; i < rawSamples.length; i++) {
+    const a = Math.abs(rawSamples[i]);
+    if (a > peakAbs) peakAbs = a;
+  }
+  if (peakAbs < 0.002) {
+    return {
+      detected: false,
+      frame: null,
+      erasureRsIndices: [],
+      markEnergyAvg: 0,
+      spaceEnergyAvg: 0,
+      snrDb: 0,
+    };
+  }
+
+  const agcGain = 0.72 / peakAbs;
+  const samples = new Float32Array(rawSamples.length);
+  for (let i = 0; i < rawSamples.length; i++) {
+    samples[i] = Math.max(-1, Math.min(1, rawSamples[i] * agcGain));
+  }
+
   const step = Math.max(8, Math.floor(spb / 4));
-  const markHistory: number[] = [];
-  const spaceHistory: number[] = [];
+  const winCount = Math.floor((samples.length - spb) / step);
+  const markHist = new Float32Array(winCount);
+  const spaceHist = new Float32Array(winCount);
 
-  // Scan sliding windows to find active carrier start
-  let carrierStart = -1;
-  for (let pos = 0; pos + spb < samples.length; pos += step) {
-    const m = goertzelMagnitude(samples, pos, spb, MARK_FREQ_HZ, sampleRate);
-    const s = goertzelMagnitude(samples, pos, spb, SPACE_FREQ_HZ, sampleRate);
-    markHistory.push(m);
-    spaceHistory.push(s);
-    if (carrierStart === -1 && m > 0.12 && m > s * 1.4) {
-      carrierStart = pos;
+  for (let w = 0; w < winCount; w++) {
+    const pos = w * step;
+    markHist[w] = goertzelMagnitude(samples, pos, spb, MARK_FREQ_HZ, sampleRate);
+    spaceHist[w] = goertzelMagnitude(samples, pos, spb, SPACE_FREQ_HZ, sampleRate);
+  }
+
+  // Locate candidate front-porch (1200 Hz) -> first start bit (2200 Hz) transitions
+  const lookbackWindows = Math.max(4, Math.round((sampleRate * 0.14) / step)); // ~140ms of mark carrier
+  const candidates: Array<{ startBitHint: number; markRef: number; spaceRef: number }> = [];
+
+  for (let w = lookbackWindows; w < winCount - 8; w++) {
+    const m = markHist[w];
+    const s = spaceHist[w];
+
+    // Check if window w is stepping out of Mark carrier into Space energy
+    if (s <= m * 0.55 || s < 0.04) continue;
+
+    // Verify preceding ~140ms was steady 1200 Hz front-porch carrier
+    let mSum = 0;
+    let sSum = 0;
+    for (let k = w - lookbackWindows; k < w; k++) {
+      mSum += markHist[k];
+      sSum += spaceHist[k];
+    }
+    const markRef = mSum / lookbackWindows;
+    const prevSpaceAvg = sSum / lookbackWindows;
+
+    if (markRef > 0.07 && markRef > prevSpaceAvg * 1.45) {
+      const startBitHint = w * step;
+      if (startBitHint + minSamples > samples.length) continue;
+
+      // Measure peak 2200 Hz energy over the first byte (start bit + 0xAA) to calibrate speaker/mic tilt
+      let spacePeak = s;
+      const scanEnd = Math.min(samples.length - spb, startBitHint + 12 * spb);
+      for (let p = startBitHint; p < scanEnd; p += Math.max(4, Math.floor(spb / 4))) {
+        const sp = goertzelMagnitude(samples, p, spb, SPACE_FREQ_HZ, sampleRate);
+        if (sp > spacePeak) spacePeak = sp;
+      }
+      const spaceRef = Math.max(markRef * 0.4, Math.min(markRef * 2.2, spacePeak));
+
+      // Coalesce adjacent detections within 80ms
+      const prev = candidates[candidates.length - 1];
+      if (!prev || startBitHint - prev.startBitHint > Math.round(sampleRate * 0.08)) {
+        candidates.push({ startBitHint, markRef, spaceRef });
+      }
     }
   }
 
-  if (carrierStart === -1) {
-    return {
-      detected: false,
-      frame: null,
-      erasureRsIndices: [],
-      markEnergyAvg: 0,
-      spaceEnergyAvg: 0,
-      snrDb: 0,
-    };
-  }
-
-  // Locate first start bit transition (Space > Mark) after front porch
-  const searchStart = carrierStart + Math.round(sampleRate * 0.25);
-  let firstStartBit = -1;
-  for (let pos = searchStart; pos + spb < samples.length; pos += 4) {
-    const m = goertzelMagnitude(samples, pos, spb, MARK_FREQ_HZ, sampleRate);
-    const s = goertzelMagnitude(samples, pos, spb, SPACE_FREQ_HZ, sampleRate);
-    if (s > m * 1.15 && s > 0.1) {
-      firstStartBit = pos;
-      break;
-    }
-  }
-
-  if (firstStartBit === -1) {
-    return {
-      detected: false,
-      frame: null,
-      erasureRsIndices: [],
-      markEnergyAvg: 0,
-      spaceEnergyAvg: 0,
-      snrDb: 0,
-    };
-  }
-
-  // Try small sample-phase offsets around firstStartBit to lock cleanly on 8N1 UART frames
   let bestFrame: Uint8Array | null = null;
   let bestSyncScore = -1;
   let bestErasures: number[] = [];
-  let sumM = 0;
-  let sumS = 0;
-  let countBits = 0;
+  let bestMarkAvg = 0;
+  let bestSpaceAvg = 0;
 
-  for (let offset = -Math.floor(spb * 0.25); offset <= Math.floor(spb * 0.25); offset += Math.max(4, Math.floor(spb / 12))) {
-    const base = firstStartBit + offset;
-    if (base < 0 || base + FRAME_SIZE * 10 * spb > samples.length) continue;
+  const phaseStep = Math.max(2, Math.floor(spb / 16));
+  const minOffset = -Math.floor(spb * 0.25);
+  const maxOffset = Math.floor(spb * 0.95);
 
-    const bytes = new Uint8Array(FRAME_SIZE);
-    const erasures: number[] = [];
-    let localM = 0;
-    let localS = 0;
-    let localBits = 0;
+  for (const cand of candidates) {
+    for (let offset = minOffset; offset <= maxOffset; offset += phaseStep) {
+      const base = cand.startBitHint + offset;
+      if (base < 0 || base + minSamples > samples.length) continue;
 
-    for (let byteIdx = 0; byteIdx < FRAME_SIZE; byteIdx++) {
-      let val = 0;
-      let minConfidence = 999;
-      for (let bitIdx = 0; bitIdx < 8; bitIdx++) {
-        const bitPos = base + (byteIdx * 10 + 1 + bitIdx) * spb;
-        const m = goertzelMagnitude(samples, bitPos, spb, MARK_FREQ_HZ, sampleRate);
-        const s = goertzelMagnitude(samples, bitPos, spb, SPACE_FREQ_HZ, sampleRate);
-        const bit = m >= s ? 1 : 0;
-        if (bit) val |= 1 << bitIdx;
+      const bytes = new Uint8Array(FRAME_SIZE);
+      const erasures: number[] = [];
+      let sumM = 0;
+      let sumS = 0;
+      let countBits = 0;
 
-        const ratio = Math.max(m, s) / (Math.min(m, s) + 1e-5);
-        if (ratio < minConfidence) minConfidence = ratio;
-        localM += m;
-        localS += s;
-        localBits++;
+      for (let byteIdx = 0; byteIdx < FRAME_SIZE; byteIdx++) {
+        let val = 0;
+        let minConfidence = 999;
+        for (let bitIdx = 0; bitIdx < 8; bitIdx++) {
+          const bitPos = base + (byteIdx * 10 + 1 + bitIdx) * spb;
+          const m = goertzelMagnitude(samples, bitPos, spb, MARK_FREQ_HZ, sampleRate);
+          const s = goertzelMagnitude(samples, bitPos, spb, SPACE_FREQ_HZ, sampleRate);
+          const mNorm = m / cand.markRef;
+          const sNorm = s / cand.spaceRef;
+          const bit = mNorm >= sNorm ? 1 : 0;
+          if (bit) val |= 1 << bitIdx;
+
+          const ratio = Math.max(mNorm, sNorm) / (Math.min(mNorm, sNorm) + 1e-5);
+          if (ratio < minConfidence) minConfidence = ratio;
+          sumM += m;
+          sumS += s;
+          countBits++;
+        }
+        bytes[byteIdx] = val;
+        if (byteIdx >= 3 && minConfidence < 1.35) {
+          erasures.push(byteIdx - 3);
+        }
       }
-      bytes[byteIdx] = val;
-      if (byteIdx >= 3 && minConfidence < 1.35) {
-        erasures.push(byteIdx - 3);
+
+      let syncScore = 0;
+      if (bytes[0] === 0xaa) syncScore += 2;
+      if (bytes[1] === 0xaa) syncScore += 2;
+      if (bytes[2] === 0x7e) syncScore += 4;
+
+      if (syncScore >= 4) {
+        const markAvg = countBits > 0 ? sumM / countBits : 0;
+        const spaceAvg = countBits > 0 ? sumS / countBits : 0;
+
+        // If CRC-16-CCITT validates (with RS repair), we have an exact bit-phase lock!
+        const check = decodeAndRepairFrame(bytes, erasures);
+        if (check.valid) {
+          const snrDb = 20 * Math.log10(Math.max(markAvg, spaceAvg) / (Math.min(markAvg, spaceAvg) * 0.2 + 0.01));
+          return {
+            detected: true,
+            frame: bytes,
+            erasureRsIndices: erasures,
+            markEnergyAvg: markAvg,
+            spaceEnergyAvg: spaceAvg,
+            snrDb: Number.isFinite(snrDb) ? snrDb : 18,
+          };
+        }
+
+        if (syncScore > bestSyncScore) {
+          bestSyncScore = syncScore;
+          bestFrame = bytes;
+          bestErasures = erasures;
+          bestMarkAvg = markAvg;
+          bestSpaceAvg = spaceAvg;
+        }
       }
     }
-
-    let syncScore = 0;
-    if (bytes[0] === 0xaa) syncScore += 2;
-    if (bytes[1] === 0xaa) syncScore += 2;
-    if (bytes[2] === 0x7e) syncScore += 4;
-
-    if (syncScore > bestSyncScore) {
-      bestSyncScore = syncScore;
-      bestFrame = bytes;
-      bestErasures = erasures;
-      sumM = localM;
-      sumS = localS;
-      countBits = localBits;
-    }
-    if (syncScore === 8) break;
   }
 
-  if (!bestFrame || bestSyncScore < 4) {
+  if (!bestFrame || bestSyncScore < 6) {
     return {
       detected: false,
       frame: null,
@@ -311,16 +373,13 @@ export function demodulateAfskAudio(
     };
   }
 
-  const markAvg = countBits > 0 ? sumM / countBits : 0;
-  const spaceAvg = countBits > 0 ? sumS / countBits : 0;
-  const snrDb = 20 * Math.log10(Math.max(markAvg, spaceAvg) / (Math.min(markAvg, spaceAvg) * 0.2 + 0.01));
-
+  const snrDb = 20 * Math.log10(Math.max(bestMarkAvg, bestSpaceAvg) / (Math.min(bestMarkAvg, bestSpaceAvg) * 0.2 + 0.01));
   return {
     detected: true,
     frame: bestFrame,
     erasureRsIndices: bestErasures,
-    markEnergyAvg: markAvg,
-    spaceEnergyAvg: spaceAvg,
+    markEnergyAvg: bestMarkAvg,
+    spaceEnergyAvg: bestSpaceAvg,
     snrDb: Number.isFinite(snrDb) ? snrDb : 18,
   };
 }

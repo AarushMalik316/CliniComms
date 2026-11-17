@@ -55,3 +55,32 @@ test('WAV encoder writes valid RIFF/WAVE PCM headers', () => {
   assert.equal(wave, 'WAVE');
   assert.equal(wav.length, 44 + samples.length * 2);
 });
+
+test('Demodulates quiet, padded, speaker-to-mic acoustic signal with 12% static', () => {
+  const frame = encodeFrame({
+    nodeId: 0x0001,
+    timestamp: 1794856200,
+    payload: { kind: 'CUSTOM_FIELD_CODE', code: 'HELLO' },
+  });
+
+  const mod = modulateAfskFrame(frame);
+  const noisy = addAcousticStatic(mod.samples, 12, 99);
+
+  // Simulate 0.6s leading ambient noise + 18x attenuation (quiet mic) + 0.5s trailing silence
+  const lead = Math.round(SAMPLE_RATE * 0.6);
+  const trail = Math.round(SAMPLE_RATE * 0.5);
+  const roomBuf = new Float32Array(lead + noisy.length + trail);
+  for (let i = 0; i < noisy.length; i++) {
+    roomBuf[lead + i] = noisy[i] * 0.05;
+  }
+
+  const demod = demodulateAfskAudio(roomBuf, SAMPLE_RATE);
+  assert.equal(demod.detected, true);
+  assert.ok(demod.frame !== null);
+  const decoded = decodeAndRepairFrame(demod.frame!, demod.erasureRsIndices, frame);
+  assert.equal(decoded.valid, true);
+  assert.equal(decoded.payload?.kind, 'CUSTOM_FIELD_CODE');
+  if (decoded.payload?.kind === 'CUSTOM_FIELD_CODE') {
+    assert.equal(decoded.payload.code, 'HELLO');
+  }
+});
