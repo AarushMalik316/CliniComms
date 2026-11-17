@@ -1,0 +1,11 @@
+{
+  "name": "SCREECH // POSTMAN — Off-Grid Desert Clinic Comms",
+  "description": "Off-grid VHF acoustic AFSK telemetry modem with Reed-Solomon FEC and AES-256-GCM Delay-Tolerant Network store-and-forward mailbag for remote desert clinics.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

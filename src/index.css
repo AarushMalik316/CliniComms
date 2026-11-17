@@ -1,0 +1,83 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Clean minimal scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(110, 109, 104, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(110, 109, 104, 0.45);
+}
+
+/* Leaflet clean card integration */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #F1F1EE;
+}
+
+.dark .leaflet-container {
+  background: #161614;
+}
+
+.dark .leaflet-tile-pane {
+  filter: invert(0.92) hue-rotate(180deg) brightness(0.88) contrast(1.05) saturate(0.75);
+}
+
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: #6E6D68 !important;
+}
+
+.dark .leaflet-control-attribution {
+  background: rgba(24, 24, 23, 0.85) !important;
+  color: #9E9C95 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px !important;
+  border: 1px solid #E7E6E2 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+}
+
+.dark .leaflet-popup-content-wrapper {
+  background: #181817 !important;
+  color: #F2F0EA !important;
+  border-color: #2A2A28 !important;
+}
+
+.leaflet-popup-tip {
+  display: none !important;
+}
